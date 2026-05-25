@@ -208,7 +208,15 @@ function package ()
 }
 
 # Install .NET SDK
-if [[ (! -d "${DOTNETSDK_INSTALLDIR}") || (! -e "${DOTNETSDK_INSTALLDIR}/.${DOTNETSDK_VERSION}") || (! -e "${DOTNETSDK_INSTALLDIR}/dotnet") ]]; then
+# s390x: Microsoft does not publish .NET SDK for s390x; use the system-installed dotnet (dnf install dotnet-sdk-8.0).
+if [[ "$(uname -m)" == "s390x" ]]; then
+    heading "Ensure Dotnet SDK"
+    if ! command -v dotnet > /dev/null; then
+        echo "dotnet not found. Install it via: dnf install dotnet-sdk-8.0" >&2
+        exit 1
+    fi
+    echo "Using system dotnet: $(command -v dotnet)"
+elif [[ (! -d "${DOTNETSDK_INSTALLDIR}") || (! -e "${DOTNETSDK_INSTALLDIR}/.${DOTNETSDK_VERSION}") || (! -e "${DOTNETSDK_INSTALLDIR}/dotnet") ]]; then
 
     # Download dotnet SDK to ../_dotnetsdk directory
     heading "Ensure Dotnet SDK"
@@ -233,8 +241,10 @@ if [[ (! -d "${DOTNETSDK_INSTALLDIR}") || (! -e "${DOTNETSDK_INSTALLDIR}/.${DOTN
     echo "${DOTNETSDK_VERSION}" > "${DOTNETSDK_INSTALLDIR}/.${DOTNETSDK_VERSION}"
 fi
 
-echo "Prepend ${DOTNETSDK_INSTALLDIR} to %PATH%"
-export PATH=${DOTNETSDK_INSTALLDIR}:$PATH
+if [[ "$(uname -m)" != "s390x" ]]; then
+    echo "Prepend ${DOTNETSDK_INSTALLDIR} to %PATH%"
+    export PATH=${DOTNETSDK_INSTALLDIR}:$PATH
+fi
 
 heading "Dotnet SDK Version"
 dotnet --version
