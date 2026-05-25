@@ -11,52 +11,56 @@ fi
 # Check dotnet Core 6.0 dependencies for Linux
 if [[ (`uname` == "Linux") ]]
 then
-    command -v ldd > /dev/null
-    if [ $? -ne 0 ]
-    then
-        echo "Can not find 'ldd'. Please install 'ldd' and try again."
-        exit 1
-    fi
-
-    message="Execute sudo ./bin/installdependencies.sh to install any missing Dotnet Core 6.0 dependencies."
-
-    ldd ./bin/libcoreclr.so | grep 'not found'
-    if [ $? -eq 0 ]; then
-        echo "Dependencies is missing for Dotnet Core 6.0"
-        echo $message
-        exit 1
-    fi
-
-    ldd ./bin/libSystem.Security.Cryptography.Native.OpenSsl.so | grep 'not found'
-    if [ $? -eq 0 ]; then
-        echo "Dependencies is missing for Dotnet Core 6.0"
-        echo $message
-        exit 1
-    fi
-
-    ldd ./bin/libSystem.IO.Compression.Native.so | grep 'not found'
-    if [ $? -eq 0 ]; then
-        echo "Dependencies is missing for Dotnet Core 6.0"
-        echo $message
-        exit 1
-    fi
-
-    if ! [ -x "$(command -v ldconfig)" ]; then
-        LDCONFIG_COMMAND="/sbin/ldconfig"
-        if ! [ -x "$LDCONFIG_COMMAND" ]; then
-            echo "Can not find 'ldconfig' in PATH and '/sbin/ldconfig' doesn't exists either. Please install 'ldconfig' and try again."
+    # s390x uses a framework-dependent build; native .so files are provided by the
+    # system-installed .NET runtime rather than bundled in ./bin, so skip these checks.
+    if [[ "$(uname -m)" != "s390x" ]]; then
+        command -v ldd > /dev/null
+        if [ $? -ne 0 ]
+        then
+            echo "Can not find 'ldd'. Please install 'ldd' and try again."
             exit 1
         fi
-    else
-        LDCONFIG_COMMAND="ldconfig"
-    fi
 
-    libpath=${LD_LIBRARY_PATH:-}
-    $LDCONFIG_COMMAND -NXv ${libpath//:/ } 2>&1 | grep libicu >/dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        echo "Libicu's dependencies is missing for Dotnet Core 6.0"
-        echo $message
-        exit 1
+        message="Execute sudo ./bin/installdependencies.sh to install any missing Dotnet Core 6.0 dependencies."
+
+        ldd ./bin/libcoreclr.so | grep 'not found'
+        if [ $? -eq 0 ]; then
+            echo "Dependencies is missing for Dotnet Core 6.0"
+            echo $message
+            exit 1
+        fi
+
+        ldd ./bin/libSystem.Security.Cryptography.Native.OpenSsl.so | grep 'not found'
+        if [ $? -eq 0 ]; then
+            echo "Dependencies is missing for Dotnet Core 6.0"
+            echo $message
+            exit 1
+        fi
+
+        ldd ./bin/libSystem.IO.Compression.Native.so | grep 'not found'
+        if [ $? -eq 0 ]; then
+            echo "Dependencies is missing for Dotnet Core 6.0"
+            echo $message
+            exit 1
+        fi
+
+        if ! [ -x "$(command -v ldconfig)" ]; then
+            LDCONFIG_COMMAND="/sbin/ldconfig"
+            if ! [ -x "$LDCONFIG_COMMAND" ]; then
+                echo "Can not find 'ldconfig' in PATH and '/sbin/ldconfig' doesn't exists either. Please install 'ldconfig' and try again."
+                exit 1
+            fi
+        else
+            LDCONFIG_COMMAND="ldconfig"
+        fi
+
+        libpath=${LD_LIBRARY_PATH:-}
+        $LDCONFIG_COMMAND -NXv ${libpath//:/ } 2>&1 | grep libicu >/dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo "Libicu's dependencies is missing for Dotnet Core 6.0"
+            echo $message
+            exit 1
+        fi
     fi
 fi
 
@@ -74,8 +78,18 @@ cd "$DIR"
 source ./env.sh
 
 shopt -s nocasematch
-if [[ "$1" == "remove" ]]; then
-    ./bin/Runner.Listener "$@"
+# s390x is framework-dependent (no native apphost); invoke via dotnet.
+# --roll-forward LatestMinor allows running on any installed 8.x patch (e.g. 8.0.26 when built against 8.0.27).
+if [[ "$(uname -m)" == "s390x" ]]; then
+    if [[ "$1" == "remove" ]]; then
+        dotnet --roll-forward LatestMinor ./bin/Runner.Listener.dll "$@"
+    else
+        dotnet --roll-forward LatestMinor ./bin/Runner.Listener.dll configure "$@"
+    fi
 else
-    ./bin/Runner.Listener configure "$@"
+    if [[ "$1" == "remove" ]]; then
+        ./bin/Runner.Listener "$@"
+    else
+        ./bin/Runner.Listener configure "$@"
+    fi
 fi

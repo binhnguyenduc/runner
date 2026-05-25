@@ -17,7 +17,7 @@ LAYOUT_DIR="$SCRIPT_DIR/../_layout"
 DOWNLOAD_DIR="$SCRIPT_DIR/../_downloads/netcore2x"
 PACKAGE_DIR="$SCRIPT_DIR/../_package"
 DOTNETSDK_ROOT="$SCRIPT_DIR/../_dotnetsdk"
-DOTNETSDK_VERSION="8.0.421"
+DOTNETSDK_VERSION="8.0.420"
 DOTNETSDK_INSTALLDIR="$DOTNETSDK_ROOT/$DOTNETSDK_VERSION"
 RUNNER_VERSION=$(cat runnerversion)
 
@@ -72,7 +72,7 @@ fi
 
 # Make sure current platform support publish the dotnet runtime
 # Windows can publish win-x86/x64/arm64
-# Linux can publish linux-x64/arm/arm64
+# Linux can publish linux-x64/arm/arm64/s390x
 # OSX can publish osx-x64/arm64
 if [[ "$CURRENT_PLATFORM" == 'windows' ]]; then
     if [[ ("$RUNTIME_ID" != 'win-x86') && ("$RUNTIME_ID" != 'win-x64') && ("$RUNTIME_ID" != 'win-arm64') ]]; then
@@ -80,7 +80,7 @@ if [[ "$CURRENT_PLATFORM" == 'windows' ]]; then
         exit 1
     fi
 elif [[ "$CURRENT_PLATFORM" == 'linux' ]]; then
-    if [[ ("$RUNTIME_ID" != 'linux-x64') && ("$RUNTIME_ID" != 'linux-x86') && ("$RUNTIME_ID" != 'linux-arm64') && ("$RUNTIME_ID" != 'linux-arm') ]]; then
+    if [[ ("$RUNTIME_ID" != 'linux-x64') && ("$RUNTIME_ID" != 'linux-x86') && ("$RUNTIME_ID" != 'linux-arm64') && ("$RUNTIME_ID" != 'linux-arm') && ("$RUNTIME_ID" != 'linux-s390x') ]]; then
        echo "Failed: Can't build $RUNTIME_ID package $CURRENT_PLATFORM" >&2
        exit 1
     fi
@@ -134,9 +134,12 @@ function layout ()
 
     #change execution flag to allow running with sudo
     if [[ ("$CURRENT_PLATFORM" == "linux") || ("$CURRENT_PLATFORM" == "darwin") ]]; then
-        chmod +x "${LAYOUT_DIR}/bin/Runner.Listener"
-        chmod +x "${LAYOUT_DIR}/bin/Runner.Worker"
-        chmod +x "${LAYOUT_DIR}/bin/Runner.PluginHost"
+        # s390x is framework-dependent (UseAppHost=false) so no native executables are produced
+        if [[ "$RUNTIME_ID" != "linux-s390x" ]]; then
+            chmod +x "${LAYOUT_DIR}/bin/Runner.Listener"
+            chmod +x "${LAYOUT_DIR}/bin/Runner.Worker"
+            chmod +x "${LAYOUT_DIR}/bin/Runner.PluginHost"
+        fi
         chmod +x "${LAYOUT_DIR}/bin/installdependencies.sh"
         chmod +x "${LAYOUT_DIR}/safe_sleep.sh"
     fi
@@ -169,8 +172,13 @@ function package ()
         echo "You must build first.  Expecting to find ${LAYOUT_DIR}/bin"
     fi
 
-    # TODO: We are cross-compiling arm on x64 so we cant exec Runner.Listener. Remove after building on native arm host
-    runner_ver=$("${LAYOUT_DIR}/bin/Runner.Listener" --version) || runner_ver=$(cat runnerversion) || failed "version"
+    # s390x and cross-compiled ARM have no native executable; fall back to runnerversion file
+    if [[ "$RUNTIME_ID" == "linux-s390x" ]]; then
+        runner_ver=$(cat runnerversion) || failed "version"
+    else
+        # TODO: We are cross-compiling arm on x64 so we cant exec Runner.Listener. Remove after building on native arm host
+        runner_ver=$("${LAYOUT_DIR}/bin/Runner.Listener" --version) || runner_ver=$(cat runnerversion) || failed "version"
+    fi
     runner_pkg_name="actions-runner-${RUNTIME_ID}-${runner_ver}"
 
     heading "Packaging ${runner_pkg_name}"

@@ -33,7 +33,13 @@ if [ ! -z "$RUNNER_WAIT_FOR_DOCKER_IN_SECONDS" ]; then
 fi
 
 updateFile="update.finished"
-"$DIR"/bin/Runner.Listener run $*
+# s390x is framework-dependent (no native apphost); invoke via dotnet.
+# --roll-forward LatestMinor allows running on any installed 8.x patch (e.g. 8.0.26 when built against 8.0.27).
+if [[ "$(uname -m)" == "s390x" ]]; then
+    dotnet --roll-forward LatestMinor "$DIR"/bin/Runner.Listener.dll run $*
+else
+    "$DIR"/bin/Runner.Listener run $*
+fi
 returnCode=$?
 if [[ $returnCode == 0 ]]; then
     echo "Runner listener exit with 0 return code, stop the service, no retry needed."
