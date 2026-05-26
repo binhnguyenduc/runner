@@ -134,8 +134,17 @@ function layout ()
 
     #change execution flag to allow running with sudo
     if [[ ("$CURRENT_PLATFORM" == "linux") || ("$CURRENT_PLATFORM" == "darwin") ]]; then
-        # s390x is framework-dependent (UseAppHost=false) so no native executables are produced
-        if [[ "$RUNTIME_ID" != "linux-s390x" ]]; then
+        # s390x is framework-dependent (UseAppHost=false) so no native executables are produced;
+        # create shell wrappers so RunnerService.js and other callers can still exec Runner.Listener/Worker/PluginHost
+        if [[ "$RUNTIME_ID" == "linux-s390x" ]]; then
+            for bin in Runner.Listener Runner.Worker Runner.PluginHost; do
+                cat > "${LAYOUT_DIR}/bin/${bin}" <<EOF
+#!/bin/bash
+exec dotnet --roll-forward LatestMinor "\$(dirname "\$0")/${bin}.dll" "\$@"
+EOF
+                chmod +x "${LAYOUT_DIR}/bin/${bin}"
+            done
+        else
             chmod +x "${LAYOUT_DIR}/bin/Runner.Listener"
             chmod +x "${LAYOUT_DIR}/bin/Runner.Worker"
             chmod +x "${LAYOUT_DIR}/bin/Runner.PluginHost"
